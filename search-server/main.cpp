@@ -64,27 +64,20 @@ public:
 
 
     void addDocument(int documentId, const string &document) {
-        const vector<string> words     = splitIntoWordsNoStop(document);
-        int                  wordsSize = words.size();
+        const map<string, int> words     = splitIntoWordsNoStop(document);
+        const int              wordsSize = words.size();
 // Принято, я убрал лишнюю переменную, но не уверен, что правильно понял, как это сделать.
 // Так как получается, что я храню промежуточные результаты вычислений в члене типа.
-
-        for (int i = 0; i < wordsSize; ++i) {
-            auto &idRelevanceDoc = _idDocumentsInWord[words[i]];
-            idRelevanceDoc[documentId] += 1.0;
-        }
-
-        for (auto &[word, idRelevanceDoc] : _idDocumentsInWord) {
-            if (idRelevanceDoc.count(documentId) != 0) {
-                idRelevanceDoc[documentId] /= wordsSize;
-            }
+        for (auto &[word,  count] : words) {
+            auto &idRelevanceDoc = _idDocumentsInWord[word];
+            idRelevanceDoc[documentId] = (count * 1.0) / wordsSize;
         }
         _documentCount++;
     }
 
 
     vector<Document> findTopDocuments(const string &rawQuery) const {
-        const vector<string> &intoWordsNoStop = splitIntoWordsNoStop(rawQuery);
+        const vector<string> &intoWordsNoStop = splitIntoWords(rawQuery);
         const set<string>    &queryWords      = parseQuery(intoWordsNoStop);
         const set<string>    &minusQueryWords = parseMinusQuery(intoWordsNoStop);
         vector<Document>     matchedDocuments = findAllDocuments(queryWords, minusQueryWords);
@@ -114,13 +107,13 @@ private:
     }
 
 
-    vector<string> splitIntoWordsNoStop(const string &text) const {
-        vector<string> words;
+    map<string, int> splitIntoWordsNoStop(const string &text) const {
+        map<string, int> words;
 
         const vector<string> &intoWords = splitIntoWords(text);
         for (const string    &word : intoWords) {
             if (!isStopWord(word)) {
-                words.push_back(word);
+                words[word]++;
             }
         }
         return words;
