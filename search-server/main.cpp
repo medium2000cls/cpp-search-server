@@ -1,205 +1,318 @@
 #include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
-#include <map>
-#include <cmath>
+
 
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
-string readLine() {
+string readLine()
+{
     string s;
     getline(cin, s);
     return s;
 }
 
-
-int readLineWithNumber() {
-    int result = 0;
+int readLineWithNumber()
+{
+    int result;
     cin >> result;
     readLine();
     return result;
 }
 
-
-vector<string> splitIntoWords(const string &text) {
+vector<string> splitIntoWords(const string& text)
+{
     vector<string> words;
-    string         word;
-
+    string word;
     for (const char c : text) {
         if (c == ' ') {
             if (!word.empty()) {
                 words.push_back(word);
                 word.clear();
             }
-        } else {
+        }
+        else {
             word += c;
         }
     }
     if (!word.empty()) {
         words.push_back(word);
     }
-
+    
     return words;
 }
 
-
-struct Document {
-    int    id;
+struct Document
+{
+    int id;
     double relevance;
+    int rating;
 };
 
+enum class DocumentStatus
+{
+    ACTUAL, IRRELEVANT, BANNED, REMOVED,
+};
 
-class SearchServer {
+class SearchServer
+{
 public:
-    void setStopWords(const string &text) {
-        const vector<string> &intoWords = splitIntoWords(text);
-        for (const string    &word : intoWords) {
+    void setStopWords(const string& text)
+    {
+        for (const string& word : splitIntoWords(text)) {
             _stopWords.insert(word);
         }
     }
-
-
-    void addDocument(int documentId, const string &document) {
-        const map<string, int> words     = splitIntoWordsNoStop(document);
-        const int              wordsSize = words.size();
-// Принято, я убрал лишнюю переменную, но не уверен, что правильно понял, как это сделать.
-// Так как получается, что я храню промежуточные результаты вычислений в члене типа.
-        for (auto &[word,  count] : words) {
-            auto &idRelevanceDoc = _idDocumentsInWord[word];
-            idRelevanceDoc[documentId] = (count * 1.0) / wordsSize;
+    
+    void addDocument(int documentId, const string& document, DocumentStatus status, const vector<int>& ratings)
+    {
+        const vector<string> words = splitIntoWordsNoStop(document);
+        const double invWordCount = 1.0 / words.size();
+        for (const string& word : words) {
+            _wordToDocumentFreqs[word][documentId] += invWordCount;
         }
-        _documentCount++;
+        _documents.emplace(documentId, DocumentData{computeAverageRating(ratings), status});
     }
-
-
-    vector<Document> findTopDocuments(const string &rawQuery) const {
-        const vector<string> &intoWordsNoStop = splitIntoWords(rawQuery);
-        const set<string>    &queryWords      = parseQuery(intoWordsNoStop);
-        const set<string>    &minusQueryWords = parseMinusQuery(intoWordsNoStop);
-        vector<Document>     matchedDocuments = findAllDocuments(queryWords, minusQueryWords);
-
-        sort(matchedDocuments.begin(), matchedDocuments.end(),
-             [](const Document &lhs, const Document &rhs) {
-                 return lhs.relevance > rhs.relevance;
-             });
+    
+    vector<Document> findTopDocuments(const string& raw_query) const
+    {
+        return findTopDocuments(raw_query, [](int documentId, DocumentStatus status, int rating) {
+            return status == DocumentStatus::ACTUAL;
+        });
+    }
+    
+    template<typename Predicate>
+    vector<Document> findTopDocuments(const string& rawQuery, Predicate predicate) const
+    {
+        vector<Document> matchedDocuments;
+        const Query query = parseQuery(rawQuery);
+    
+        if constexpr (is_same_v<Predicate, DocumentStatus>) {
+            function<bool(int, DocumentStatus, int )> resultPredicate;
+    
+            if (predicate == DocumentStatus::ACTUAL) {
+                resultPredicate = [](int documentId,
+                                     DocumentStatus status,
+                                     int rating) { return status == DocumentStatus::ACTUAL; };
+            }
+            else if (predicate == DocumentStatus::IRRELEVANT) {
+                resultPredicate = [](int documentId,
+                                     DocumentStatus status,
+                                     int rating) { return status == DocumentStatus::IRRELEVANT; };
+            }
+            else if (predicate == DocumentStatus::BANNED) {
+                resultPredicate = [](int documentId,
+                                     DocumentStatus status,
+                                     int rating) { return status == DocumentStatus::BANNED; };
+            }
+            else if (predicate == DocumentStatus::REMOVED) {
+                resultPredicate = [](int documentId,
+                                     DocumentStatus status,
+                                     int rating) { return status == DocumentStatus::REMOVED; };
+            }
+            matchedDocuments = FindAllDocuments(query, resultPredicate);
+        }
+        else{
+            matchedDocuments = FindAllDocuments(query, predicate);
+        }
+    
+        sort(matchedDocuments.begin(), matchedDocuments.end(), [](const Document& lhs, const Document& rhs) {
+            if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                return lhs.rating > rhs.rating;
+            }
+            else {
+                return lhs.relevance > rhs.relevance;
+            }
+        });
         if (matchedDocuments.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matchedDocuments.resize(MAX_RESULT_DOCUMENT_COUNT);
         }
         return matchedDocuments;
     }
-
-private:
-// Все переменные привел к одному стилю, кроме того, всю программу привел в соответствии с рекомендациями
-// по стилю написания кода на С++
-// Отошел в рекомендации, при именовании приватных членов типа, если так не принято, то исправлю.
-// https://habr.com/ru/post/172091/
-    map<string, map<int, double>> _idDocumentsInWord;
-    int                           _documentCount = 0;
-    set<string>                   _stopWords;
-
-
-    bool isStopWord(const string &word) const {
-        return _stopWords.count(word) > 0;
+    
+    int getDocumentCount() const
+    {
+        return _documents.size();
+    }
+    
+    tuple<vector<string>, DocumentStatus> matchDocument(const string& rawQuery, int documentId) const
+    {
+        const Query query = parseQuery(rawQuery);
+        vector<string> matchedWords;
+        for (const string& word : query.plusWords) {
+            if (_wordToDocumentFreqs.count(word) == 0) {
+                continue;
+            }
+            if (_wordToDocumentFreqs.at(word).count(documentId)) {
+                matchedWords.push_back(word);
+            }
+        }
+        for (const string& word : query.minusWords) {
+            if (_wordToDocumentFreqs.count(word) == 0) {
+                continue;
+            }
+            if (_wordToDocumentFreqs.at(word).count(documentId)) {
+                matchedWords.clear();
+                break;
+            }
+        }
+        return {matchedWords, _documents.at(documentId).status};
     }
 
-
-    map<string, int> splitIntoWordsNoStop(const string &text) const {
-        map<string, int> words;
-
-        const vector<string> &intoWords = splitIntoWords(text);
-        for (const string    &word : intoWords) {
+private:
+    struct DocumentData
+    {
+        int rating;
+        DocumentStatus status;
+    };
+    
+    set<string> _stopWords;
+    map<string, map<int, double>> _wordToDocumentFreqs;
+    map<int, DocumentData> _documents;
+    
+    bool isStopWord(const string& word) const
+    {
+        return _stopWords.count(word) > 0;
+    }
+    
+    vector<string> splitIntoWordsNoStop(const string& text) const
+    {
+        vector<string> words;
+        for (const string& word : splitIntoWords(text)) {
             if (!isStopWord(word)) {
-                words[word]++;
+                words.push_back(word);
             }
         }
         return words;
     }
-
-// Перенес контейнер intoWordsNoStop в метод findTopDocuments,
-// что бы не вызывать метод splitIntoWordsNoStop два раза
-    set<string> parseQuery(const vector<string> &intoWordsNoStop) const {
-        set<string> queryWords;
-
-        for (const string &word : intoWordsNoStop) {
-            if (word[0] != '-') {
-                queryWords.insert(word);
+    
+    static int computeAverageRating(const vector<int>& ratings)
+    {
+        if (ratings.empty()) {
+            return 0;
+        }
+        int ratingSum = 0;
+        for (const int rating : ratings) {
+            ratingSum += rating;
+        }
+        return ratingSum / static_cast<int>(ratings.size());
+    }
+    
+    struct QueryWord
+    {
+        string data;
+        bool isMinus;
+        bool isStop;
+    };
+    
+    QueryWord parseQueryWord(string text) const
+    {
+        bool isMinus = false;
+        // Word shouldn't be empty
+        if (text[0] == '-') {
+            isMinus = true;
+            text = text.substr(1);
+        }
+        return {text, isMinus, isStopWord(text)};
+    }
+    
+    struct Query
+    {
+        set<string> plusWords;
+        set<string> minusWords;
+    };
+    
+    Query parseQuery(const string& text) const
+    {
+        Query query;
+        for (const string& word : splitIntoWords(text)) {
+            const QueryWord queryWord = parseQueryWord(word);
+            if (!queryWord.isStop) {
+                if (queryWord.isMinus) {
+                    query.minusWords.insert(queryWord.data);
+                }
+                else {
+                    query.plusWords.insert(queryWord.data);
+                }
             }
         }
-        return queryWords;
+        return query;
     }
-
-
-    set<string> parseMinusQuery(const vector<string> &intoWordsNoStop) const {
-        set<string> minusQueryWords;
-
-        for (string word : intoWordsNoStop) {
-            if (word[0] == '-') {
-                //Убрал лишнюю переменную
-                word.erase(0, 1); //Удаляю минус перед словом
-                //"Можно сразу отбросить стоп слова, их нет в индексе." это замечание не понял
-                minusQueryWords.insert(word);
+    
+    // Existence required
+    double ComputeWordInverseDocumentFreq(const string& word) const
+    {
+        return log(getDocumentCount() * 1.0 / _wordToDocumentFreqs.at(word).size());
+    }
+    
+    template<typename Predicate>
+    vector<Document> FindAllDocuments(const Query& query, Predicate predicate) const
+    {
+        map<int, double> documentToRelevance;
+        for (const string& word : query.plusWords) {
+            if (_wordToDocumentFreqs.count(word) == 0) {
+                continue;
+            }
+            const double inverseDocumentFreq = ComputeWordInverseDocumentFreq(word);
+            for (const auto [documentId, termFreq] : _wordToDocumentFreqs.at(word)) {
+                auto filterPredicate = predicate(documentId, _documents.at(documentId).status,
+                        _documents.at(documentId).rating);
+                if (filterPredicate) {
+                    documentToRelevance[documentId] += termFreq * inverseDocumentFreq;
+                }
             }
         }
-        return minusQueryWords;
-    }
-
-
-    vector<Document> findAllDocuments(const set<string> &queryWords, const set<string> &minusQueryWords) const {
+        
+        for (const string& word : query.minusWords) {
+            if (_wordToDocumentFreqs.count(word) == 0) {
+                continue;
+            }
+            for (const auto [documentId, _] : _wordToDocumentFreqs.at(word)) {
+                documentToRelevance.erase(documentId);
+            }
+        }
+        
         vector<Document> matchedDocuments;
-        map<int, double> docIdRelevance;
-
-        for (auto word : queryWords) {
-            if (_idDocumentsInWord.count(word) != 0) {
-                double wordDocCount = _idDocumentsInWord.at(word).size();
-                double idf          = log(_documentCount / wordDocCount);
-                for (auto [docId, tf] : _idDocumentsInWord.at(word)) {
-                    docIdRelevance[docId] += (idf * tf);
-                }
-            }
+        for (const auto [documentId, relevance] : documentToRelevance) {
+            matchedDocuments.push_back({documentId, relevance, _documents.at(documentId).rating});
         }
-
-        for (auto word : minusQueryWords) {
-            if (_idDocumentsInWord.count(word) != 0) {
-                for (auto [docId, tf] : _idDocumentsInWord.at(word)) {
-                    if (docIdRelevance.count(docId) != 0) {
-                        docIdRelevance.erase(docId);
-                    }
-                }
-            }
-        }
-
-        for (const auto &[documentId, relevance] : docIdRelevance) {
-            matchedDocuments.push_back({documentId, relevance});
-        }
-
         return matchedDocuments;
     }
 };
 
-
-SearchServer createSearchServer() {
-    SearchServer searchServer;
-    searchServer.setStopWords(readLine());
-
-    const int documentCount = readLineWithNumber();
-    for (int  documentId    = 0; documentId < documentCount; ++documentId) {
-        searchServer.addDocument(documentId, readLine());
-    }
-
-    return searchServer;
+// ==================== для примера =========================
+void PrintDocument(const Document& document)
+{
+    cout << "{ "s << "document_id = "s << document.id << ", "s << "relevance = "s << document.relevance << ", "s
+            << "rating = "s << document.rating << " }"s << endl;
 }
 
-
 int main() {
-    const SearchServer searchServer = createSearchServer();
-
-    const string query = readLine();
-    for (const auto &[documentId, relevance] : searchServer.findTopDocuments(query)) {
-        cout << "{ documentId = "s << documentId << ", "
-             << "relevance = "s << relevance << " }"s << endl;
+    SearchServer searchServer;
+    searchServer.setStopWords("и в на"s);
+    searchServer.addDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, -3});
+    searchServer.addDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {7, 2, 7});
+    searchServer.addDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
+    searchServer.addDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {9});
+    cout << "ACTUAL by default:"s << endl;
+    for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s)) {
+        PrintDocument(document);
     }
+    cout << "BANNED:"s << endl;
+    for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED)) {
+        PrintDocument(document);
+    }
+    cout << "Even ids:"s << endl;
+    for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s,
+            [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
+        PrintDocument(document);
+    }
+    return 0;
 }
