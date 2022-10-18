@@ -6,11 +6,12 @@
 #include <string>
 #include <utility>
 #include <vector>
-
+#include <numeric>
 
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double ACCURACY_COMPARISON = 1e-6;
 
 string readLine()
 {
@@ -67,7 +68,7 @@ public:
     void setStopWords(const string& text)
     {
         for (const string& word : splitIntoWords(text)) {
-            _stopWords.insert(word);
+            stopWords_.insert(word);
         }
     }
     
@@ -75,10 +76,11 @@ public:
     {
         const vector<string> words = splitIntoWordsNoStop(document);
         const double invWordCount = 1.0 / words.size();
+        
         for (const string& word : words) {
-            _wordToDocumentFreqs[word][documentId] += invWordCount;
+            wordToDocumentFreqs_[word][documentId] += invWordCount;
         }
-        _documents.emplace(documentId, DocumentData{computeAverageRating(ratings), status});
+        documents_.emplace(documentId, DocumentData{computeAverageRating(ratings), status});
     }
     
     vector<Document> findTopDocuments(const string& raw_query) const
@@ -88,43 +90,25 @@ public:
         });
     }
     
-    template<typename Predicate>
-    vector<Document> findTopDocuments(const string& rawQuery, Predicate predicate) const
+    vector<Document> findTopDocuments(const string& raw_query, const DocumentStatus& documentStatus) const
     {
-        vector<Document> matchedDocuments;
+        return findTopDocuments(raw_query, [&documentStatus](int documentId,
+                                                             DocumentStatus status,
+                                                             int rating) { return status == documentStatus; });
+    }
+    
+    template<typename Predicate>
+    vector<Document> findTopDocuments(const string& rawQuery, const Predicate& predicate) const
+    {
         const Query query = parseQuery(rawQuery);
-    
-        if constexpr (is_same_v<Predicate, DocumentStatus>) {
-            function<bool(int, DocumentStatus, int )> resultPredicate;
-    
-            if (predicate == DocumentStatus::ACTUAL) {
-                resultPredicate = [](int documentId,
-                                     DocumentStatus status,
-                                     int rating) { return status == DocumentStatus::ACTUAL; };
-            }
-            else if (predicate == DocumentStatus::IRRELEVANT) {
-                resultPredicate = [](int documentId,
-                                     DocumentStatus status,
-                                     int rating) { return status == DocumentStatus::IRRELEVANT; };
-            }
-            else if (predicate == DocumentStatus::BANNED) {
-                resultPredicate = [](int documentId,
-                                     DocumentStatus status,
-                                     int rating) { return status == DocumentStatus::BANNED; };
-            }
-            else if (predicate == DocumentStatus::REMOVED) {
-                resultPredicate = [](int documentId,
-                                     DocumentStatus status,
-                                     int rating) { return status == DocumentStatus::REMOVED; };
-            }
-            matchedDocuments = FindAllDocuments(query, resultPredicate);
-        }
-        else{
-            matchedDocuments = FindAllDocuments(query, predicate);
-        }
-    
+        vector<Document> matchedDocuments = findAllDocuments(query, predicate);
+        // Принято, сделал перегрузку метода, он теперь принимает статус. Разобрался с constexpr, это спецификатор, который
+        // говорит о том, что расчет будет произведен во время компиляции, а если этого сделать нельзя, то блок будет
+        // обрабатываться уже во время выполнения программы.
+        // В перегрузке, статус захватываю в лямбду.
         sort(matchedDocuments.begin(), matchedDocuments.end(), [](const Document& lhs, const Document& rhs) {
-            if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+            // Вынес константу в отдельную глобальную константу.
+            if (abs(lhs.relevance - rhs.relevance) < ACCURACY_COMPARISON) {
                 return lhs.rating > rhs.rating;
             }
             else {
@@ -139,7 +123,7 @@ public:
     
     int getDocumentCount() const
     {
-        return _documents.size();
+        return documents_.size();
     }
     
     tuple<vector<string>, DocumentStatus> matchDocument(const string& rawQuery, int documentId) const
@@ -147,23 +131,23 @@ public:
         const Query query = parseQuery(rawQuery);
         vector<string> matchedWords;
         for (const string& word : query.plusWords) {
-            if (_wordToDocumentFreqs.count(word) == 0) {
+            if (wordToDocumentFreqs_.count(word) == 0) {
                 continue;
             }
-            if (_wordToDocumentFreqs.at(word).count(documentId)) {
+            if (wordToDocumentFreqs_.at(word).count(documentId)) {
                 matchedWords.push_back(word);
             }
         }
         for (const string& word : query.minusWords) {
-            if (_wordToDocumentFreqs.count(word) == 0) {
+            if (wordToDocumentFreqs_.count(word) == 0) {
                 continue;
             }
-            if (_wordToDocumentFreqs.at(word).count(documentId)) {
+            if (wordToDocumentFreqs_.at(word).count(documentId)) {
                 matchedWords.clear();
                 break;
             }
         }
-        return {matchedWords, _documents.at(documentId).status};
+        return {matchedWords, documents_.at(documentId).status};
     }
 
 private:
@@ -173,13 +157,14 @@ private:
         DocumentStatus status;
     };
     
-    set<string> _stopWords;
-    map<string, map<int, double>> _wordToDocumentFreqs;
-    map<int, DocumentData> _documents;
+    set<string> stopWords_;
+    map<string, map<int, double>> wordToDocumentFreqs_;
+    //Принято, буду руководствоваться этим правилом.
+    map<int, DocumentData> documents_;
     
     bool isStopWord(const string& word) const
     {
-        return _stopWords.count(word) > 0;
+        return stopWords_.count(word) > 0;
     }
     
     vector<string> splitIntoWordsNoStop(const string& text) const
@@ -198,10 +183,9 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int ratingSum = 0;
-        for (const int rating : ratings) {
-            ratingSum += rating;
-        }
+        //Принято, переменную оставил для читаемости.
+        int ratingSum = accumulate(ratings.begin(), ratings.end(), 0);
+        
         return ratingSum / static_cast<int>(ratings.size());
     }
     
@@ -247,23 +231,25 @@ private:
     }
     
     // Existence required
-    double ComputeWordInverseDocumentFreq(const string& word) const
+    double computeWordInverseDocumentFreq(const string& word) const
     {
-        return log(getDocumentCount() * 1.0 / _wordToDocumentFreqs.at(word).size());
+        return log(getDocumentCount() * 1.0 / wordToDocumentFreqs_.at(word).size());
     }
     
+    //Исправил стиль, все имена методов и функций с маленькой буквы.
     template<typename Predicate>
-    vector<Document> FindAllDocuments(const Query& query, Predicate predicate) const
+    vector<Document> findAllDocuments(const Query& query, Predicate& predicate) const
     {
         map<int, double> documentToRelevance;
         for (const string& word : query.plusWords) {
-            if (_wordToDocumentFreqs.count(word) == 0) {
+            if (wordToDocumentFreqs_.count(word) == 0) {
                 continue;
             }
-            const double inverseDocumentFreq = ComputeWordInverseDocumentFreq(word);
-            for (const auto [documentId, termFreq] : _wordToDocumentFreqs.at(word)) {
-                auto filterPredicate = predicate(documentId, _documents.at(documentId).status,
-                        _documents.at(documentId).rating);
+            const double inverseDocumentFreq = computeWordInverseDocumentFreq(word);
+            for (const auto [documentId, termFreq] : wordToDocumentFreqs_.at(word)) {
+                //Записал результат в переменную
+                auto document = documents_.at(documentId);
+                bool filterPredicate = predicate(documentId, document.status, document.rating);
                 if (filterPredicate) {
                     documentToRelevance[documentId] += termFreq * inverseDocumentFreq;
                 }
@@ -271,30 +257,31 @@ private:
         }
         
         for (const string& word : query.minusWords) {
-            if (_wordToDocumentFreqs.count(word) == 0) {
+            if (wordToDocumentFreqs_.count(word) == 0) {
                 continue;
             }
-            for (const auto [documentId, _] : _wordToDocumentFreqs.at(word)) {
+            for (const auto [documentId, _] : wordToDocumentFreqs_.at(word)) {
                 documentToRelevance.erase(documentId);
             }
         }
         
         vector<Document> matchedDocuments;
         for (const auto [documentId, relevance] : documentToRelevance) {
-            matchedDocuments.push_back({documentId, relevance, _documents.at(documentId).rating});
+            matchedDocuments.push_back({documentId, relevance, documents_.at(documentId).rating});
         }
         return matchedDocuments;
     }
 };
 
 // ==================== для примера =========================
-void PrintDocument(const Document& document)
+void printDocument(const Document& document)
 {
     cout << "{ "s << "document_id = "s << document.id << ", "s << "relevance = "s << document.relevance << ", "s
             << "rating = "s << document.rating << " }"s << endl;
 }
 
-int main() {
+int main()
+{
     SearchServer searchServer;
     searchServer.setStopWords("и в на"s);
     searchServer.addDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {8, -3});
@@ -303,16 +290,16 @@ int main() {
     searchServer.addDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {9});
     cout << "ACTUAL by default:"s << endl;
     for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s)) {
-        PrintDocument(document);
+        printDocument(document);
     }
     cout << "BANNED:"s << endl;
     for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s, DocumentStatus::BANNED)) {
-        PrintDocument(document);
+        printDocument(document);
     }
     cout << "Even ids:"s << endl;
     for (const Document& document : searchServer.findTopDocuments("пушистый ухоженный кот"s,
             [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
-        PrintDocument(document);
+        printDocument(document);
     }
     return 0;
 }
