@@ -85,14 +85,14 @@ public:
     
     vector<Document> findTopDocuments(const string& raw_query) const
     {
-        return findTopDocuments(raw_query, [](int documentId, DocumentStatus status, int rating) {
-            return status == DocumentStatus::ACTUAL;
-        });
+        //Убрал дублирование перегрузки с предикатом, добавил вызов перегрузки со статусом
+        return findTopDocuments(raw_query, DocumentStatus::ACTUAL);
     }
     
-    vector<Document> findTopDocuments(const string& raw_query, const DocumentStatus& documentStatus) const
+    //Принято, небольшие типы лучше принимать и захватывать по значению.
+    vector<Document> findTopDocuments(const string& raw_query, const DocumentStatus documentStatus) const
     {
-        return findTopDocuments(raw_query, [&documentStatus](int documentId,
+        return findTopDocuments(raw_query, [documentStatus](int documentId,
                                                              DocumentStatus status,
                                                              int rating) { return status == documentStatus; });
     }
