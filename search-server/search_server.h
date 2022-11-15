@@ -8,7 +8,7 @@
 #include <valarray>
 #include "document.h"
 #include "string_processing.h"
-
+const double ACCURACY_COMPARISON = 1e-6;
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
 class SearchServer
@@ -89,7 +89,8 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
     auto matched_documents = FindAllDocuments(query, document_predicate);
     
     std::sort(matched_documents.begin(), matched_documents.end(), [](const Document& lhs, const Document& rhs) {
-        if (std::abs(lhs.relevance - rhs.relevance) < 1e-6) {
+        //Добавил глобальную константу
+        if (std::abs(lhs.relevance - rhs.relevance) < ACCURACY_COMPARISON) {
             return lhs.rating > rhs.rating;
         }
         else {

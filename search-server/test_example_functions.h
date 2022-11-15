@@ -8,7 +8,6 @@
 #include "document.h"
 #include "search_server.h"
 
-const double ACCURACY_COMPARISON = 1e-6;
 
 // -------- Начало модульных тестов поисковой системы ----------
 template<typename T>
