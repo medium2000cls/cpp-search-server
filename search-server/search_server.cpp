@@ -42,6 +42,7 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
 
 std::tuple<std::vector<std::string>, DocumentStatus> SearchServer::MatchDocument(const std::string& raw_query,
                                                                                  int document_id) const {
+    LOG_DURATION;
     auto query = ParseQuery(raw_query);
     std::vector<std::string> matched_words;
     for (const std::string& word : query.plus_words) {

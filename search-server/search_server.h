@@ -8,6 +8,8 @@
 #include <valarray>
 #include "document.h"
 #include "string_processing.h"
+#include "log_duration.h"
+
 const double ACCURACY_COMPARISON = 1e-6;
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
 
@@ -71,7 +73,6 @@ private:
     
     template<typename DocumentPredicate>
     std::vector<Document> FindAllDocuments(const Query& query, DocumentPredicate document_predicate) const;
-    
 };
 
 template<typename StringContainer>
@@ -85,6 +86,7 @@ SearchServer::SearchServer(const StringContainer& stop_words) : stop_words_(Make
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query,
                                                      DocumentPredicate document_predicate) const {
+    LOG_DURATION;
     auto query = ParseQuery(raw_query);
     auto matched_documents = FindAllDocuments(query, document_predicate);
     
