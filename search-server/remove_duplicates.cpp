@@ -3,17 +3,17 @@
 void RemoveDuplicates(SearchServer& search_server)
 {
     set<int> documents_for_delete;
-    
-    //Изменил метод, теперь он ищет по словарю какое количество документов было добавлено с одинаковым запросом.
-    //Если количество превышает 1, то остальные документы добавляются в коллекцию для удаления.
-    //Применил упрощенный for
-    for (auto & item : search_server) {
-        auto& documents = item.second;
-        if (documents.size() > 1){
-            for (auto it_doc = ++documents.begin(); it_doc != documents.end(); ++it_doc) {
-                documents_for_delete.insert((*it_doc));
-            }
+    set<set<string>> words_catalog;
+    for (auto& document_id : search_server) {
+        const auto& word_fregs = search_server.GetWordFrequencies(document_id);
+        set<string> words;
+        for (const auto& [word, _] : word_fregs) {
+            words.insert(word);
         }
+        if (words_catalog.count(words)) {
+            documents_for_delete.insert(document_id);
+        }
+        else { words_catalog.insert(words); }
     }
     
     for (auto document_id : documents_for_delete) {
