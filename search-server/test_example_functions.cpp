@@ -1,7 +1,11 @@
 #include "test_example_functions.h"
 #include "paginator.h"
 
-void AssertImpl(bool value, const std::string& expr_str, const std::string& file, const std::string& func, unsigned int line,
+void AssertImpl(bool value,
+                const std::string& expr_str,
+                const std::string& file,
+                const std::string& func,
+                unsigned int line,
                 const std::string& hint)
 {
     using namespace std;
@@ -123,7 +127,7 @@ void TestSortDocumentByRelevance()
     ASSERT_EQUAL(documents.size(), 4);
     
     for (int i = 1; i < static_cast<int>(documents.size()); ++i) {
-    ASSERT(documents[i - 1].relevance >= documents[i].relevance);
+        ASSERT(documents[i - 1].relevance >= documents[i].relevance);
     }
 }
 
@@ -270,6 +274,66 @@ void TestCorrectPaginationFoundDocument()
     }
 }
 
+void TestGetWordFrequencies()
+{
+    using namespace std;
+    
+    SearchServer searchServer;
+    searchServer.AddDocument(0, "white cat fashionable collar"s, DocumentStatus::ACTUAL, {1, 2});
+    searchServer.AddDocument(1, "fluffy cat fluffy tail"s, DocumentStatus::ACTUAL, {-1, -2, -3});
+    searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
+    searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
+    {
+        map<string, double> words_freg_sample{{"white",0.25},{"cat",0.25},{"fashionable",0.25},{"collar",0.25}};
+        const auto result = searchServer.GetWordFrequencies(0);
+        ASSERT(result == words_freg_sample);
+    }
+    {
+        map<string, double> words_freg_sample{{"cat",0.25},{"fluffy",0.5},{"tail",0.25}};
+        const auto& result = searchServer.GetWordFrequencies(1);
+        ASSERT(result == words_freg_sample);
+    }
+    {
+        map<string, double> words_freg_sample{{"well-groomed",0.25},{"dog",0.25},{"expressive",0.25},{"eyes",0.25}};
+        const auto& result = searchServer.GetWordFrequencies(2);
+        ASSERT(result == words_freg_sample);
+    }
+    {
+        map<string, double> words_freg_sample{{"well-groomed",0.33333333333333331},{"starling",0.33333333333333331},{"eugene",0.33333333333333331}};
+        const auto& result = searchServer.GetWordFrequencies(3);
+        ASSERT(result == words_freg_sample);
+    }
+    {
+        map<string, double> words_freg_sample;
+        const auto& result = searchServer.GetWordFrequencies(4);
+        ASSERT(result == words_freg_sample);
+    }
+    
+}
+
+void TestRemoveDocument()
+{
+    using namespace std;
+    
+    SearchServer searchServer;
+    searchServer.AddDocument(0, "white cat fashionable collar"s, DocumentStatus::ACTUAL, {1, 2});
+    searchServer.AddDocument(1, "fluffy cat fluffy tail"s, DocumentStatus::ACTUAL, {-1, -2, -3});
+    searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
+    searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
+    {
+        map<string, double> words_freg_sample{{"cat",0.25},{"fluffy",0.5},{"tail",0.25}};
+        const auto& result = searchServer.GetWordFrequencies(1);
+        ASSERT(result == words_freg_sample);
+    }
+    {
+        map<string, double> words_freg_sample;
+        searchServer.RemoveDocument(1);
+        const auto& result = searchServer.GetWordFrequencies(1);
+        ASSERT(result == words_freg_sample);
+    }
+
+}
+
 void TestSearchServer()
 {
     RUN_TEST (TestAddDocumentMustBeFoundFromQuery);
@@ -282,5 +346,7 @@ void TestSearchServer()
     RUN_TEST (TestSearchDocumentByStatus);
     RUN_TEST (TestComputeRelevanceFoundDocument);
     RUN_TEST (TestCorrectPaginationFoundDocument);
+    RUN_TEST (TestGetWordFrequencies);
+    RUN_TEST (TestRemoveDocument);
 }
 

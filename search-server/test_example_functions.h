@@ -132,6 +132,10 @@ void TestComputeRelevanceFoundDocument();
 //Корректное разделение на страницы.
 void TestCorrectPaginationFoundDocument();
 
+//Корректный возврат слова и частоты слов по ID.
+void TestGetWordFrequencies();
+//Корректное удаление документа по ID.
+void TestRemoveDocument();
 
 // Функция TestSearchServer является точкой входа для запуска тестов
 void TestSearchServer();

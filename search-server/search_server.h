@@ -23,7 +23,10 @@ public:
     
     explicit SearchServer(const std::string& stop_words_text);
     
-    void AddDocument(int document_id, const std::string& document, DocumentStatus status, const std::vector<int>& ratings);
+    void AddDocument(int document_id,
+                     const std::string& document,
+                     DocumentStatus status,
+                     const std::vector<int>& ratings);
     
     template<typename DocumentPredicate>
     std::vector<Document> FindTopDocuments(const std::string& raw_query, DocumentPredicate document_predicate) const;
@@ -32,11 +35,24 @@ public:
     
     std::vector<Document> FindTopDocuments(const std::string& raw_query) const;
     
-    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query, int document_id) const;
+    std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string& raw_query,
+                                                                       int document_id) const;
     
     int GetDocumentCount() const;
     
-    int GetDocumentId(int index) const;
+    const map<string, double>& GetWordFrequencies(int document_id) const;
+    
+    void RemoveDocument(int document_id);
+    
+    auto begin()
+    {
+        return order_documents_id_.begin();
+    }
+    
+    auto end()
+    {
+        return order_documents_id_.end();
+    }
 
 private:
     struct DocumentData
@@ -57,18 +73,25 @@ private:
     };
     
     const std::set<std::string> stop_words_;
-    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     
+    std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+    std::map<int, std::map<string, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
+    
     std::vector<int> order_documents_id_;
+    
     static bool IsValidWord(const std::string& word);
+    
     bool IsStopWord(const std::string& word) const;
+    
     std::vector<std::string> SplitIntoWordsNoStop(const std::string& text) const;
     
     static int ComputeAverageRating(const std::vector<int>& ratings);
     
     QueryWord ParseQueryWord(std::string text) const;
+    
     Query ParseQuery(const std::string& text) const;
+    
     double ComputeWordInverseDocumentFreq(const std::string& word) const;
     
     template<typename DocumentPredicate>
@@ -85,8 +108,9 @@ SearchServer::SearchServer(const StringContainer& stop_words) : stop_words_(Make
 
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_query,
-                                                     DocumentPredicate document_predicate) const {
-    LOG_DURATION;
+                                                     DocumentPredicate document_predicate) const
+{
+    //LOG_DURATION;
     auto query = ParseQuery(raw_query);
     auto matched_documents = FindAllDocuments(query, document_predicate);
     
@@ -107,7 +131,8 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
 
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& query,
-                                                     DocumentPredicate document_predicate) const {
+                                                     DocumentPredicate document_predicate) const
+{
     std::map<int, double> document_to_relevance;
     for (const std::string& word : query.plus_words) {
         if (word_to_document_freqs_.count(word) == 0) {
@@ -137,3 +162,4 @@ std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& 
     }
     return matched_documents;
 }
+
