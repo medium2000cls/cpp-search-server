@@ -15,32 +15,32 @@ int main()
 {
     using namespace std;
     TestSearchServer();
-    // Если вы видите эту строку, значит все тесты прошли успешно
+    // Р•СЃР»Рё РІС‹ РІРёРґРёС‚Рµ СЌС‚Сѓ СЃС‚СЂРѕРєСѓ, Р·РЅР°С‡РёС‚ РІСЃРµ С‚РµСЃС‚С‹ РїСЂРѕС€Р»Рё СѓСЃРїРµС€РЅРѕ
     cout << "Search server testing finished"s << endl;
     SearchServer search_server("and with"s);
     
     search_server.AddDocument(1, "funny pet and nasty rat"s, DocumentStatus::ACTUAL, {7, 2, 7});
     search_server.AddDocument(2, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // дубликат документа 2, будет удалён
+    // РґСѓР±Р»РёРєР°С‚ РґРѕРєСѓРјРµРЅС‚Р° 2, Р±СѓРґРµС‚ СѓРґР°Р»С‘РЅ
     search_server.AddDocument(3, "funny pet with curly hair"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // отличие только в стоп-словах, считаем дубликатом
+    // РѕС‚Р»РёС‡РёРµ С‚РѕР»СЊРєРѕ РІ СЃС‚РѕРї-СЃР»РѕРІР°С…, СЃС‡РёС‚Р°РµРј РґСѓР±Р»РёРєР°С‚РѕРј
     search_server.AddDocument(4, "funny pet and curly hair"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // множество слов такое же, считаем дубликатом документа 1
+    // РјРЅРѕР¶РµСЃС‚РІРѕ СЃР»РѕРІ С‚Р°РєРѕРµ Р¶Рµ, СЃС‡РёС‚Р°РµРј РґСѓР±Р»РёРєР°С‚РѕРј РґРѕРєСѓРјРµРЅС‚Р° 1
     search_server.AddDocument(5, "funny funny pet and nasty nasty rat"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // добавились новые слова, дубликатом не является
+    // РґРѕР±Р°РІРёР»РёСЃСЊ РЅРѕРІС‹Рµ СЃР»РѕРІР°, РґСѓР±Р»РёРєР°С‚РѕРј РЅРµ СЏРІР»СЏРµС‚СЃСЏ
     search_server.AddDocument(6, "funny pet and not very nasty rat"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // множество слов такое же, как в id 6, несмотря на другой порядок, считаем дубликатом
+    // РјРЅРѕР¶РµСЃС‚РІРѕ СЃР»РѕРІ С‚Р°РєРѕРµ Р¶Рµ, РєР°Рє РІ id 6, РЅРµСЃРјРѕС‚СЂСЏ РЅР° РґСЂСѓРіРѕР№ РїРѕСЂСЏРґРѕРє, СЃС‡РёС‚Р°РµРј РґСѓР±Р»РёРєР°С‚РѕРј
     search_server.AddDocument(7, "very nasty rat and not very funny pet"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // есть не все слова, не является дубликатом
+    // РµСЃС‚СЊ РЅРµ РІСЃРµ СЃР»РѕРІР°, РЅРµ СЏРІР»СЏРµС‚СЃСЏ РґСѓР±Р»РёРєР°С‚РѕРј
     search_server.AddDocument(8, "pet with rat and rat and rat"s, DocumentStatus::ACTUAL, {1, 2});
     
-    // слова из разных документов, не является дубликатом
+    // СЃР»РѕРІР° РёР· СЂР°Р·РЅС‹С… РґРѕРєСѓРјРµРЅС‚РѕРІ, РЅРµ СЏРІР»СЏРµС‚СЃСЏ РґСѓР±Р»РёРєР°С‚РѕРј
     search_server.AddDocument(9, "nasty rat with curly hair"s, DocumentStatus::ACTUAL, {1, 2});
     
     cout << "Before duplicates removed: "s << search_server.GetDocumentCount() << endl;

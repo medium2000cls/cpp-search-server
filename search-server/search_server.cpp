@@ -81,13 +81,13 @@ const map<string, double>& SearchServer::GetWordFrequencies(int document_id) con
         const static map<string, double> word_frequencies_empty;
         return word_frequencies_empty;
     }
-    //Убрал лишнюю переменную
+    //РЈР±СЂР°Р» Р»РёС€РЅСЋСЋ РїРµСЂРµРјРµРЅРЅСѓСЋ
     return document_to_word_freqs_.at(document_id);
 }
 
 void SearchServer::RemoveDocument(int document_id)
 {
-    //Удаление из words_documents_id_
+    //РЈРґР°Р»РµРЅРёРµ РёР· words_documents_id_
     auto words_freg = document_to_word_freqs_[document_id];
     set<string> words;
     for_each(words_freg.begin(), words_freg.end(), [&words](const auto& keyValuePair){
@@ -95,7 +95,7 @@ void SearchServer::RemoveDocument(int document_id)
     });
     words_documents_id_[words].erase(document_id);
     
-    //Удаление из word_to_document_freqs_
+    //РЈРґР°Р»РµРЅРёРµ РёР· word_to_document_freqs_
     std::for_each(word_to_document_freqs_.begin(), word_to_document_freqs_.end(),
             [document_id](decltype(*word_to_document_freqs_.begin())& el) {
                 auto& documents = el.second;
@@ -103,9 +103,9 @@ void SearchServer::RemoveDocument(int document_id)
                     documents.erase(document_id);
                 }
             });
-    //Удаление из document_to_word_freqs_
+    //РЈРґР°Р»РµРЅРёРµ РёР· document_to_word_freqs_
     document_to_word_freqs_.erase(document_id);
-    //Удаление из documents_
+    //РЈРґР°Р»РµРЅРёРµ РёР· documents_
     documents_.erase(document_id);
 }
 
@@ -138,7 +138,7 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings)
         return 0;
     }
     int rating_sum = 0;
-    //Изменил цикл на accumulate
+    //РР·РјРµРЅРёР» С†РёРєР» РЅР° accumulate
     rating_sum = std::accumulate(ratings.begin(), ratings.end(), 0);
     return rating_sum / static_cast<int>(ratings.size());
 }
