@@ -1,22 +1,17 @@
 #include "remove_duplicates.h"
 
-template <typename T>
-static bool CompareMapsKeys (const map<string, T>& lhs, const map<string, T>& rhs) {
-    if (lhs.size() != rhs.size()) { return false; }
-    for(const auto& [key_lhs, _] : lhs ) {
-        if (!rhs.count(key_lhs)) { return false; }
-    }
-    return true;
-}
-
 void RemoveDuplicates(SearchServer& search_server)
 {
     set<int> documents_for_delete;
     
-    for (auto it = search_server.begin(); it != search_server.end(); ++it) {
-        for(auto it_2 = it + 1; it_2 != search_server.end(); ++it_2) {
-            if (CompareMapsKeys(search_server.GetWordFrequencies(*it),search_server.GetWordFrequencies(*it_2))){
-                documents_for_delete.insert(*it_2);
+    //Изменил метод, теперь он ищет по словарю какое количество документов было добавлено с одинаковым запросом.
+    //Если количество превышает 1, то остальные документы добавляются в коллекцию для удаления.
+    //Применил упрощенный for
+    for (auto & item : search_server) {
+        auto& documents = item.second;
+        if (documents.size() > 1){
+            for (auto it_doc = ++documents.begin(); it_doc != documents.end(); ++it_doc) {
+                documents_for_delete.insert((*it_doc));
             }
         }
     }

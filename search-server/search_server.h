@@ -46,12 +46,12 @@ public:
     
     auto begin()
     {
-        return order_documents_id_.begin();
+        return words_documents_id_.begin();
     }
     
     auto end()
     {
-        return order_documents_id_.end();
+        return words_documents_id_.end();
     }
 
 private:
@@ -77,8 +77,8 @@ private:
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
     std::map<int, std::map<string, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
-    
-    std::vector<int> order_documents_id_;
+    //Изменил тип контейнера
+    std::map<set<string>, set<int>> words_documents_id_;
     
     static bool IsValidWord(const std::string& word);
     

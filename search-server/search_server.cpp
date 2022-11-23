@@ -26,7 +26,8 @@ void SearchServer::AddDocument(int document_id,
         word_to_document_freqs_[word][document_id] += inv_word_count;
         document_to_word_freqs_[document_id][word] += inv_word_count;
     }
-    order_documents_id_.push_back(document_id);
+    set<string> words_collection_for_document (words.begin(), words.end());
+    words_documents_id_[words_collection_for_document].insert(document_id);
     documents_.emplace(document_id, DocumentData{ComputeAverageRating(ratings), status});
 }
 
@@ -80,12 +81,21 @@ const map<string, double>& SearchServer::GetWordFrequencies(int document_id) con
         const static map<string, double> word_frequencies_empty;
         return word_frequencies_empty;
     }
-    const map<string, double>& word_frequencies = document_to_word_freqs_.at(document_id);
-    return word_frequencies;
+    //Убрал лишнюю переменную
+    return document_to_word_freqs_.at(document_id);
 }
 
 void SearchServer::RemoveDocument(int document_id)
 {
+    //Удаление из words_documents_id_
+    auto words_freg = document_to_word_freqs_[document_id];
+    set<string> words;
+    for_each(words_freg.begin(), words_freg.end(), [&words](const auto& keyValuePair){
+         words.insert(keyValuePair.first);
+    });
+    words_documents_id_[words].erase(document_id);
+    
+    //Удаление из word_to_document_freqs_
     std::for_each(word_to_document_freqs_.begin(), word_to_document_freqs_.end(),
             [document_id](decltype(*word_to_document_freqs_.begin())& el) {
                 auto& documents = el.second;
@@ -93,10 +103,10 @@ void SearchServer::RemoveDocument(int document_id)
                     documents.erase(document_id);
                 }
             });
+    //Удаление из document_to_word_freqs_
     document_to_word_freqs_.erase(document_id);
+    //Удаление из documents_
     documents_.erase(document_id);
-    const vector<int>::iterator& position = find(order_documents_id_.begin(), order_documents_id_.end(), document_id);
-    order_documents_id_.erase(position);
 }
 
 bool SearchServer::IsValidWord(const std::string& word)
@@ -128,7 +138,7 @@ int SearchServer::ComputeAverageRating(const std::vector<int>& ratings)
         return 0;
     }
     int rating_sum = 0;
-    //РР·РјРµРЅРёР» С†РёРєР» РЅР° accumulate
+    //Изменил цикл на accumulate
     rating_sum = std::accumulate(ratings.begin(), ratings.end(), 0);
     return rating_sum / static_cast<int>(ratings.size());
 }
