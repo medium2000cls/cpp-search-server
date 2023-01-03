@@ -74,10 +74,10 @@ int SearchServer::GetDocumentCount() const
     return documents_.size();
 }
 
-const map<string, double>& SearchServer::GetWordFrequencies(int document_id) const
+const std::map<std::string, double>& SearchServer::GetWordFrequencies(int document_id) const
 {
     if(!document_to_word_freqs_.count(document_id)) {
-        const static map<string, double> word_frequencies_empty;
+        const static std::map<std::string, double> word_frequencies_empty;
         return word_frequencies_empty;
     }
     return document_to_word_freqs_.at(document_id);
@@ -85,16 +85,7 @@ const map<string, double>& SearchServer::GetWordFrequencies(int document_id) con
 
 void SearchServer::RemoveDocument(int document_id)
 {
-    std::for_each(word_to_document_freqs_.begin(), word_to_document_freqs_.end(),
-            [document_id](decltype(*word_to_document_freqs_.begin())& el) {
-                auto& documents = el.second;
-                if (documents.count(document_id)) {
-                    documents.erase(document_id);
-                }
-            });
-    document_to_word_freqs_.erase(document_id);
-    documents_.erase(document_id);
-    order_documents_id_.erase(document_id);
+    SearchServer::RemoveDocument(std::execution::seq, document_id);
 }
 
 bool SearchServer::IsValidWord(const std::string& word)
@@ -175,6 +166,5 @@ double SearchServer::ComputeWordInverseDocumentFreq(const std::string& word) con
 {
     return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
 }
-
 
 

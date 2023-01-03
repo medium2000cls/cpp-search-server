@@ -2,6 +2,7 @@
 
 void RemoveDuplicates(SearchServer& search_server)
 {
+    using namespace std;
     set<int> documents_for_delete;
     set<set<string>> words_catalog;
     for (auto& document_id : search_server) {

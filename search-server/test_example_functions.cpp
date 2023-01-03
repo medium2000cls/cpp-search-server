@@ -1,5 +1,6 @@
 #include "test_example_functions.h"
 #include "paginator.h"
+#include "process_queries.h"
 
 void AssertImpl(bool value,
                 const std::string& expr_str,
@@ -315,23 +316,89 @@ void TestRemoveDocument()
 {
     using namespace std;
     
-    SearchServer searchServer;
-    searchServer.AddDocument(0, "white cat fashionable collar"s, DocumentStatus::ACTUAL, {1, 2});
-    searchServer.AddDocument(1, "fluffy cat fluffy tail"s, DocumentStatus::ACTUAL, {-1, -2, -3});
-    searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
-    searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
     {
-        map<string, double> words_freg_sample{{"cat",0.25},{"fluffy",0.5},{"tail",0.25}};
-        const auto& result = searchServer.GetWordFrequencies(1);
-        ASSERT(result == words_freg_sample);
+        SearchServer searchServer;
+        searchServer.AddDocument(0, "white cat fashionable collar"s, DocumentStatus::ACTUAL, {1, 2});
+        searchServer.AddDocument(1, "fluffy cat fluffy tail"s, DocumentStatus::ACTUAL, {-1, -2, -3});
+        searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
+        searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
+        {
+            map<string, double> words_freg_sample{{"cat",    0.25},
+                                                  {"fluffy", 0.5},
+                                                  {"tail",   0.25}};
+            const auto& result = searchServer.GetWordFrequencies(1);
+            ASSERT(result == words_freg_sample);
+        }
+        {
+            map<string, double> words_freg_sample;
+            searchServer.RemoveDocument(1);
+            const auto& result = searchServer.GetWordFrequencies(1);
+            ASSERT(result == words_freg_sample);
+        }
     }
     {
-        map<string, double> words_freg_sample;
-        searchServer.RemoveDocument(1);
-        const auto& result = searchServer.GetWordFrequencies(1);
-        ASSERT(result == words_freg_sample);
+        SearchServer search_server("and with"s);
+        
+        int id = 0;
+        for (const string& text : {"funny pet and nasty rat"s,
+                                   "funny pet with curly hair"s,
+                                   "funny pet and not very nasty rat"s,
+                                   "pet with rat and rat and rat"s,
+                                   "nasty rat with curly hair"s,}) {
+            search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+        }
+        
+        const string query = "curly and funny"s;
+        
+        // однопоточная версия
+        search_server.RemoveDocument(5);
+        ASSERT(search_server.FindTopDocuments(query).size() == 3);
+        // однопоточная версия
+        search_server.RemoveDocument(execution::seq, 1);
+        ASSERT(search_server.FindTopDocuments(query).size() == 2);
+        // многопоточная версия
+        search_server.RemoveDocument(execution::par, 2);
+        ASSERT(search_server.FindTopDocuments(query).size() == 1);
     }
+}
 
+void TestProcessQueries()
+{
+    using namespace std;
+    SearchServer searchServer;
+    SearchServer search_server("and with"s);
+    int id = 0;
+    for (const string& text : {"funny pet and nasty rat"s,
+                               "funny pet with curly hair"s,
+                               "funny pet and not very nasty rat"s,
+                               "pet with rat and rat and rat"s, "nasty rat with curly hair"s,}) {
+        search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+    }
+    const vector<string> queries = {"nasty rat -not"s, "not very funny nasty pet"s, "curly hair"s};
+    id = 0;
+    vector<size_t> example{3, 5, 2};
+    for (const auto& documents : ProcessQueries(search_server, queries)) {
+        ASSERT(documents.size() == example[id++]);
+    }
+}
+
+void TestProcessQueriesJoined()
+{
+    using namespace std;
+    SearchServer searchServer;
+    SearchServer search_server("and with"s);
+    int id = 0;
+    for (const string& text : {"funny pet and nasty rat"s,
+                               "funny pet with curly hair"s,
+                               "funny pet and not very nasty rat"s,
+                               "pet with rat and rat and rat"s,
+                               "nasty rat with curly hair"s,}) {
+        search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
+    }
+    const vector<string> queries = {"nasty rat -not"s, "not very funny nasty pet"s, "curly hair"s};
+    auto joined = ProcessQueriesJoined(search_server, queries);
+    ASSERT(std::distance(joined.begin(), joined.end()) == 10);
+    
 }
 
 void TestSearchServer()
@@ -348,5 +415,7 @@ void TestSearchServer()
     RUN_TEST (TestCorrectPaginationFoundDocument);
     RUN_TEST (TestGetWordFrequencies);
     RUN_TEST (TestRemoveDocument);
+    RUN_TEST (TestProcessQueries);
+    RUN_TEST (TestProcessQueriesJoined);
 }
 

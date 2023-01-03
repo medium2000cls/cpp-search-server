@@ -6,9 +6,11 @@
 #include <set>
 #include <map>
 #include <valarray>
+#include <execution>
 #include "document.h"
 #include "string_processing.h"
 #include "log_duration.h"
+
 
 const double ACCURACY_COMPARISON = 1e-6;
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
@@ -40,9 +42,29 @@ public:
     
     int GetDocumentCount() const;
     
-    const map<string, double>& GetWordFrequencies(int document_id) const;
+    const std::map<std::string, double>& GetWordFrequencies(int document_id) const;
+    
     
     void RemoveDocument(int document_id);
+    
+    template<typename ExecutionPolicy>
+    void RemoveDocument(ExecutionPolicy&& policy, int document_id)
+    {
+        std::map<std::string, double> words_to_erase;
+        if (document_to_word_freqs_.count(document_id)) {
+            words_to_erase = document_to_word_freqs_[document_id];
+        }
+        std::for_each(policy, words_to_erase.begin(), words_to_erase.end(),
+                [document_id, this](decltype(*words_to_erase.begin())& el) {
+                    auto& word = el.first;
+                    if (word_to_document_freqs_.count(word)) {
+                        word_to_document_freqs_[word].erase(document_id);
+                    }
+                });
+        document_to_word_freqs_.erase(document_id);
+        documents_.erase(document_id);
+        order_documents_id_.erase(document_id);
+    }
     
     auto begin()
     {
@@ -75,7 +97,7 @@ private:
     const std::set<std::string> stop_words_;
     
     std::map<std::string, std::map<int, double>> word_to_document_freqs_;
-    std::map<int, std::map<string, double>> document_to_word_freqs_;
+    std::map<int, std::map<std::string, double>> document_to_word_freqs_;
     std::map<int, DocumentData> documents_;
     //Изменил тип контейнера
     std::set<int> order_documents_id_;
@@ -128,7 +150,6 @@ std::vector<Document> SearchServer::FindTopDocuments(const std::string& raw_quer
     }
     return matched_documents;
 }
-
 template<typename DocumentPredicate>
 std::vector<Document> SearchServer::FindAllDocuments(const SearchServer::Query& query,
                                                      DocumentPredicate document_predicate) const

@@ -137,6 +137,9 @@ void TestGetWordFrequencies();
 //Корректное удаление документа по ID.
 void TestRemoveDocument();
 
+void TestProcessQueries();
+
+void TestProcessQueriesJoined();
 // Функция TestSearchServer является точкой входа для запуска тестов
 void TestSearchServer();
 // --------- Окончание модульных тестов поисковой системы -----------
