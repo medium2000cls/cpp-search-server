@@ -50,17 +50,14 @@ public:
     template<typename ExecutionPolicy>
     void RemoveDocument(ExecutionPolicy&& policy, int document_id)
     {
-        std::map<std::string, double> words_to_erase;
-        if (document_to_word_freqs_.count(document_id)) {
-            words_to_erase = document_to_word_freqs_[document_id];
-        }
-        std::for_each(policy, words_to_erase.begin(), words_to_erase.end(),
-                [document_id, this](decltype(*words_to_erase.begin())& el) {
-                    auto& word = el.first;
-                    if (word_to_document_freqs_.count(word)) {
-                        word_to_document_freqs_[word].erase(document_id);
-                    }
-                });
+        std::map<std::string, double>& words_freqs_to_erase = document_to_word_freqs_[document_id];
+        std::vector<std::string> words(words_freqs_to_erase.size());
+        std::transform(policy, words_freqs_to_erase.begin(), words_freqs_to_erase.end(), words.begin(),
+                [](const auto& el) { return el.first; });
+    
+        std::for_each(policy, words.begin(), words.end(), [document_id, this](auto& word) {
+            word_to_document_freqs_[word].erase(document_id);
+        });
         document_to_word_freqs_.erase(document_id);
         documents_.erase(document_id);
         order_documents_id_.erase(document_id);
