@@ -2,12 +2,8 @@
 #include "paginator.h"
 #include "process_queries.h"
 
-void AssertImpl(bool value,
-                const std::string& expr_str,
-                const std::string& file,
-                const std::string& func,
-                unsigned int line,
-                const std::string& hint)
+void AssertImpl(bool value, const std::string& expr_str, const std::string& file, const std::string& func,
+        unsigned int line, const std::string& hint)
 {
     using namespace std;
     
@@ -92,25 +88,135 @@ void TestSupportMinusWordsTheyExcludedDocumentFromResult()
 
 void TestMatchDocumentCheckReturnWords()
 {
-    using namespace std;
-    
-    SearchServer searchServer;
-    searchServer.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
-    set<string> test_word = {"белый", "кот"};
     {
-        tuple<vector<string>, DocumentStatus> match_document = searchServer.MatchDocument("белый кот пушистый хвост"s,
-                0);
-        const auto& [words, _] = match_document;
-        ASSERT_EQUAL(words.size(), 2);
-        for (const auto& word : words) {
-            ASSERT(test_word.count(word) != 0);
+        using namespace std;
+        using Word = std::string_view;
+        
+        SearchServer searchServer;
+        searchServer.AddDocument(0, "белый кот и модный ошейник"s, DocumentStatus::ACTUAL, {1, 2});
+        searchServer.AddDocument(1, "пушистый кот пушистый хвост"s, DocumentStatus::ACTUAL, {1, 2, 3});
+        searchServer.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
+        searchServer.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::ACTUAL, {1});
+        
+        const set<Word> test_word = {"белый", "кот"};
+        {
+            tuple<vector<Word>, DocumentStatus> match_document = searchServer.MatchDocument(
+                    "белый белый  кот пушистый хвост"s, 0);
+            const auto& [words, _] = match_document;
+            ASSERT_EQUAL(words.size(), 2);
+            for (const auto& word : words) {
+                ASSERT(test_word.count(word) != 0);
+            }
+        }
+        {
+            tuple<vector<Word>, DocumentStatus> match_document = searchServer.MatchDocument(execution::seq,
+                    "белый белый  кот пушистый хвост"s, 0);
+            const auto& [words, _] = match_document;
+            ASSERT_EQUAL(words.size(), 2);
+            for (const auto& word : words) {
+                ASSERT(test_word.count(word));
+            }
+        }
+        {
+            tuple<vector<Word>, DocumentStatus> match_document = searchServer.MatchDocument(execution::par,
+                    "белый белый  кот пушистый хвост"s, 0);
+            const auto& [words, _] = match_document;
+            ASSERT_EQUAL(words.size(), 2);
+            for (const auto& word : words) {
+                ASSERT(test_word.count(word));
+            }
+        }
+        {
+            tuple<vector<Word>, DocumentStatus> match_document = searchServer.MatchDocument(
+                    "белый белый  -кот пушистый хвост"s, 0);
+            const auto& [words, _] = match_document;
+            ASSERT_EQUAL(words.size(), 0);
+        }
+        {
+            tuple<vector<Word>, DocumentStatus> match_document = searchServer.MatchDocument(execution::par,
+                    "белый белый  -кот пушистый хвост"s, 0);
+            const auto& [words, _] = match_document;
+            ASSERT_EQUAL(words.size(), 0);
         }
     }
     {
-        tuple<vector<string>, DocumentStatus> match_document = searchServer.MatchDocument("белый -кот пушистый хвост"s,
-                0);
-        const auto& [words, _] = match_document;
-        ASSERT_EQUAL(words.size(), 0);
+        using namespace std;
+        
+        const std::string general_document_text = "cat dog puppy kitty"s;
+        constexpr int general_document_id = 1;
+        const std::vector<int> general_ratings = {1, 2, 3, 4};
+        
+        {
+            const std::string kQueryWithMinusWords = "cat -puppy"s;
+            SearchServer server;
+            
+            server.AddDocument(1, "cat home"s, DocumentStatus::ACTUAL, general_ratings);
+            server.AddDocument(2, "cat puppy home"s, DocumentStatus::ACTUAL, general_ratings);
+            
+            auto found_documents = server.FindTopDocuments(kQueryWithMinusWords);
+            ASSERT_EQUAL_HINT(found_documents.size(), 1, "Server returns ONLY the documents without minus words, which were in query"s);
+            
+            found_documents = server.FindTopDocuments("home puppy -puppy");
+            ASSERT_EQUAL_HINT(found_documents.size(), 1, "Server returns ONLY the documents without minus words, if query has a word and the same word as minus word"s);
+            
+            auto [matching_words, _] = server.MatchDocument(kQueryWithMinusWords, 1);
+            ASSERT_HINT(!matching_words.empty(), "Server matches the words if query has a minus word which absent in the document"s);
+            
+            std::tie(matching_words, _) = server.MatchDocument(kQueryWithMinusWords, 2);
+            ASSERT_HINT(matching_words.empty(), "Server does not match any word for the document if it has at least one minus word"s);
+        }
+        
+        {
+            int max_special_symbol_index{31};
+            SearchServer server;
+            
+            server.AddDocument(general_document_id, general_document_text, DocumentStatus::ACTUAL, general_ratings);
+            
+            try {
+                auto matching_result = server.MatchDocument(""s, general_document_id);
+            }
+            catch (std::invalid_argument& e) {
+                ASSERT(true);
+                
+            }
+            catch (...) {
+                ASSERT_HINT(false, "Server should throw if matching query is empty"s);
+            }
+            
+            std::string query;
+            for (int symbol_index = 0; symbol_index < max_special_symbol_index; ++symbol_index) {
+                query = "cat"s + static_cast<char>(symbol_index) + " dog"s;
+                try {
+                    auto matching_result = server.MatchDocument(query, general_document_id);
+                }
+                catch (std::invalid_argument& e) {
+                    ASSERT(true);
+                }
+                catch (...) {
+                    ASSERT_HINT(false, "Server should throw if at least one special symbol is detected"s);
+                }
+            }
+            
+            {
+                auto [matching_words, _] = server.MatchDocument("none bug"s, general_document_id);
+                ASSERT_HINT(matching_words.empty(), "Server does not match any word if it is not in a document"s);
+            }
+            {
+                auto [matching_words, _] = server.MatchDocument("puppy cat"s, general_document_id);
+                ASSERT_EQUAL_HINT(matching_words.size(), 2, "Server matches all words from query in document"s);
+                
+                std::sort(matching_words.begin(), matching_words.end());
+                
+                auto t = matching_words[0];
+                ASSERT_HINT(matching_words[0] == "cat"s, "Server match the exact word from the query"s);
+                
+                ASSERT_HINT(matching_words[1] == "puppy"s, "Server match the exact word from the query"s);
+                
+                std::tie(matching_words, _) = server.MatchDocument("cat dog -puppy", general_document_id);
+                ASSERT_HINT(matching_words.empty(),
+                        "Server does not match any word for the document if it has at least on minus word"s);
+            }
+        }
     }
 }
 
@@ -171,17 +277,17 @@ void TestFilteringResultSearch()
     searchServer.AddDocument(3, "ухоженный скворец евгений"s, DocumentStatus::BANNED, {-1});
     
     {
-        auto documents = searchServer.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id,
-                                                                                     [[maybe_unused]] DocumentStatus status,
-                                                                                     [[maybe_unused]] int rating) { return document_id % 2 == 0; });
+        auto documents = searchServer.FindTopDocuments("пушистый ухоженный кот"s,
+                [](int document_id, [[maybe_unused]] DocumentStatus status,
+                        [[maybe_unused]] int rating) { return document_id % 2 == 0; });
         ASSERT_EQUAL(documents.size(), 2);
         ASSERT_EQUAL(documents[0].id, 2);
         ASSERT_EQUAL(documents[1].id, 0);
     }
     {
-        auto documents = searchServer.FindTopDocuments("пушистый ухоженный кот"s, []([[maybe_unused]] int document_id,
-                                                                                     [[maybe_unused]] DocumentStatus status,
-                                                                                     int rating) { return rating > 0; });
+        auto documents = searchServer.FindTopDocuments("пушистый ухоженный кот"s,
+                []([[maybe_unused]] int document_id, [[maybe_unused]] DocumentStatus status,
+                        int rating) { return rating > 0; });
         ASSERT_EQUAL(documents.size(), 2);
         ASSERT(documents[0].rating > 0);
         ASSERT(documents[1].rating > 0);
@@ -285,27 +391,37 @@ void TestGetWordFrequencies()
     searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
     searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
     {
-        map<string, double> words_freg_sample{{"white",0.25},{"cat",0.25},{"fashionable",0.25},{"collar",0.25}};
+        map<string_view, double> words_freg_sample{{"white",       0.25},
+                                                   {"cat",         0.25},
+                                                   {"fashionable", 0.25},
+                                                   {"collar",      0.25}};
         const auto result = searchServer.GetWordFrequencies(0);
         ASSERT(result == words_freg_sample);
     }
     {
-        map<string, double> words_freg_sample{{"cat",0.25},{"fluffy",0.5},{"tail",0.25}};
+        map<string_view, double> words_freg_sample{{"cat",    0.25},
+                                                   {"fluffy", 0.5},
+                                                   {"tail",   0.25}};
         const auto& result = searchServer.GetWordFrequencies(1);
         ASSERT(result == words_freg_sample);
     }
     {
-        map<string, double> words_freg_sample{{"well-groomed",0.25},{"dog",0.25},{"expressive",0.25},{"eyes",0.25}};
+        map<string_view, double> words_freg_sample{{"well-groomed", 0.25},
+                                                   {"dog",          0.25},
+                                                   {"expressive",   0.25},
+                                                   {"eyes",         0.25}};
         const auto& result = searchServer.GetWordFrequencies(2);
         ASSERT(result == words_freg_sample);
     }
     {
-        map<string, double> words_freg_sample{{"well-groomed",0.33333333333333331},{"starling",0.33333333333333331},{"eugene",0.33333333333333331}};
+        map<string_view, double> words_freg_sample{{"well-groomed", 0.33333333333333331},
+                                                   {"starling",     0.33333333333333331},
+                                                   {"eugene",       0.33333333333333331}};
         const auto& result = searchServer.GetWordFrequencies(3);
         ASSERT(result == words_freg_sample);
     }
     {
-        map<string, double> words_freg_sample;
+        map<string_view, double> words_freg_sample;
         const auto& result = searchServer.GetWordFrequencies(4);
         ASSERT(result == words_freg_sample);
     }
@@ -323,14 +439,14 @@ void TestRemoveDocument()
         searchServer.AddDocument(2, "well-groomed dog expressive eyes"s, DocumentStatus::ACTUAL, {1, 2, 3, 4});
         searchServer.AddDocument(3, "well-groomed starling eugene"s, DocumentStatus::ACTUAL, {-1});
         {
-            map<string, double> words_freg_sample{{"cat",    0.25},
-                                                  {"fluffy", 0.5},
-                                                  {"tail",   0.25}};
+            map<string_view, double> words_freg_sample{{"cat",    0.25},
+                                                       {"fluffy", 0.5},
+                                                       {"tail",   0.25}};
             const auto& result = searchServer.GetWordFrequencies(1);
             ASSERT(result == words_freg_sample);
         }
         {
-            map<string, double> words_freg_sample;
+            map<string_view, double> words_freg_sample;
             searchServer.RemoveDocument(1);
             const auto& result = searchServer.GetWordFrequencies(1);
             ASSERT(result == words_freg_sample);
@@ -371,7 +487,8 @@ void TestProcessQueries()
     for (const string& text : {"funny pet and nasty rat"s,
                                "funny pet with curly hair"s,
                                "funny pet and not very nasty rat"s,
-                               "pet with rat and rat and rat"s, "nasty rat with curly hair"s,}) {
+                               "pet with rat and rat and rat"s,
+                               "nasty rat with curly hair"s,}) {
         search_server.AddDocument(++id, text, DocumentStatus::ACTUAL, {1, 2});
     }
     const vector<string> queries = {"nasty rat -not"s, "not very funny nasty pet"s, "curly hair"s};
