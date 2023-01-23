@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <tuple>
 #include "document.h"
 #include "search_server.h"
 
@@ -112,6 +113,8 @@ void AssertEqualImpl(const T& t, const U& u, const std::string& t_str, const std
 
 //Добавление документов. Добавленный документ должен находиться по поисковому запросу, который содержит слова из документа.
 void TestAddDocumentMustBeFoundFromQuery();
+//Поиск документа
+void TestFindTopDocument();
 //Поддержка стоп-слов. Стоп-слова исключаются из текста документов.
 void TestSupportStopWordsTheyExcludedDocumentText();
 //Поддержка минус-слов. Документы, содержащие минус-слова поискового запроса, не должны включаться в результаты поиска.
@@ -125,7 +128,7 @@ void TestSortDocumentByRelevance();
 void TestComputeRatingDocument();
 //Фильтрация результатов поиска с использованием предиката, задаваемого пользователем.
 void TestFilteringResultSearch();
-//Поиск документов, имеющих заданный статус.
+////Поиск документов, имеющих заданный статус.
 void TestSearchDocumentByStatus();
 //Корректное вычисление релевантности найденных документов.
 void TestComputeRelevanceFoundDocument();

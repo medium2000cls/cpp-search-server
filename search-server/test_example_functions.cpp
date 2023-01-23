@@ -40,6 +40,102 @@ void TestAddDocumentMustBeFoundFromQuery()
     }
 }
 
+void TestFindTopDocument()
+{
+    using namespace std;
+    auto PrintDocument = [](const Document& document) -> string {
+        string t  = "{ "s + "document_id = "s + to_string(document.id) + ", "s + "relevance = "s + to_string(
+                document.relevance) + ", "s + "rating = "s + to_string(document.rating) + " }"s;
+        //cout << t << endl;
+        return t;
+    };
+    {
+        SearchServer search_server("and with"s);
+        int id = 0;
+        vector<pair<string, DocumentStatus>> documents_text{{"white cat and yellow hat"s, DocumentStatus::ACTUAL},
+                                                            {"curly cat curly tail"s,     DocumentStatus::ACTUAL},
+                                                            {"nasty dog with big eyes"s,  DocumentStatus::ACTUAL},
+                                                            {"nasty pigeon john"s,        DocumentStatus::ACTUAL},
+                                                            {"white1 cat1 and yellow1 hat1"s, DocumentStatus::BANNED},
+                                                            {"curly1 cat1 curly1 tail1"s,     DocumentStatus::BANNED},
+                                                            {"nasty1 dog1 with big1 eyes1"s,  DocumentStatus::BANNED},
+                                                            {"nasty1 pigeon1 john1"s,        DocumentStatus::BANNED},};
+        
+        for (const auto& [text, status] : documents_text) {
+            search_server.AddDocument(++id, text, status, {1, 2});
+        }
+        vector<string> control_string{"{ document_id = 2, relevance = 1.386294, rating = 1 }",
+                                      "{ document_id = 4, relevance = 0.462098, rating = 1 }",
+                                      "{ document_id = 1, relevance = 0.346574, rating = 1 }",
+                                      "{ document_id = 3, relevance = 0.346574, rating = 1 }",
+                                      "{ document_id = 6, relevance = 1.386294, rating = 1 }",
+                                      "{ document_id = 8, relevance = 0.462098, rating = 1 }",
+                                      "{ document_id = 5, relevance = 0.346574, rating = 1 }",
+                                      "{ document_id = 7, relevance = 0.346574, rating = 1 }"};
+    
+        {
+            int test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments("curly nasty cat"s)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // последовательная версия
+            test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments(execution::seq, "curly nasty cat"s)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // параллельная версия
+            test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments(execution::par, "curly nasty cat"s)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+        }
+        {
+            int test_counter = 4;
+            for (const Document& document : search_server.FindTopDocuments("curly1 nasty1 cat1"s, DocumentStatus::BANNED)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // последовательная версия
+            test_counter = 4;
+            for (const Document& document : search_server.FindTopDocuments(execution::seq, "curly1 nasty1 cat1"s, DocumentStatus::BANNED)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // параллельная версия
+            test_counter = 4;
+            for (const Document& document : search_server.FindTopDocuments(execution::par, "curly1 nasty1 cat1"s, DocumentStatus::BANNED)) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+        }
+        {
+            int test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments("curly nasty cat"s,
+                    [](int document_id, [[maybe_unused]]DocumentStatus status, [[maybe_unused]]int rating) { return document_id % 2 == 0; })) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // последовательная версия
+            test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments(execution::seq, "curly nasty cat"s,
+                    [](int document_id, [[maybe_unused]]DocumentStatus status, [[maybe_unused]]int rating) { return document_id % 2 == 0; })) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+            // параллельная версия
+            test_counter = 0;
+            for (const Document& document : search_server.FindTopDocuments(execution::par, "curly nasty cat"s,
+                    [](int document_id, [[maybe_unused]]DocumentStatus status, [[maybe_unused]]int rating) { return document_id % 2 == 0; })) {
+                ASSERT(control_string[test_counter] == PrintDocument(document));
+                ++test_counter;
+            }
+        }
+    }
+}
+
 void TestSupportStopWordsTheyExcludedDocumentText()
 {
     using namespace std;
@@ -207,7 +303,7 @@ void TestMatchDocumentCheckReturnWords()
                 
                 std::sort(matching_words.begin(), matching_words.end());
                 
-                auto t = matching_words[0];
+                //auto t = matching_words[0];
                 ASSERT_HINT(matching_words[0] == "cat"s, "Server match the exact word from the query"s);
                 
                 ASSERT_HINT(matching_words[1] == "puppy"s, "Server match the exact word from the query"s);
@@ -521,6 +617,7 @@ void TestProcessQueriesJoined()
 void TestSearchServer()
 {
     RUN_TEST (TestAddDocumentMustBeFoundFromQuery);
+    RUN_TEST (TestFindTopDocument);
     RUN_TEST (TestSupportStopWordsTheyExcludedDocumentText);
     RUN_TEST (TestSupportMinusWordsTheyExcludedDocumentFromResult);
     RUN_TEST (TestMatchDocumentCheckReturnWords);
