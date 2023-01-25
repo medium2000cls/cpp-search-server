@@ -11,7 +11,12 @@ std::vector<std::vector<Document>> ProcessQueries(const SearchServer& search_ser
     return results;
 }
 
-std::vector<Document> ProcessQueriesJoined(const SearchServer& search_server, const std::vector<std::string>& queries)
+ListFromVecInDegree<std::vector<std::vector<Document>>,Document> ProcessQueriesJoined(const SearchServer& search_server, const std::vector<std::string>& queries)
+{
+    return ListFromVecInDegree<std::vector<std::vector<Document>>,Document> (ProcessQueries(search_server, queries));
+}
+
+std::vector<Document> ProcessQueriesJoinedInVector(const SearchServer& search_server, const std::vector<std::string>& queries)
 {
     std::vector<Document> result;
     for (std::vector<Document> documents : ProcessQueries(search_server, queries)) {

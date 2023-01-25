@@ -595,6 +595,122 @@ void TestProcessQueries()
     }
 }
 
+void TestIteratorTree()
+{
+    using namespace std;
+    {
+        vector<vector<int>> vector_test{{1,  2,  3},
+                                        {4,  5,  6},
+                                        {7,  8,  9},
+                                        {10, 11, 12},
+                                        {13, 14, 15},
+                                        {16, 17, 18},
+                                        {19, 20, 21},
+                                        {22, 23, 24},
+                                        {25, 26, 27},
+                                        {28, 29, 30}};
+        
+        ListFromVecInDegree<vector<vector<int>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            ASSERT(s == ++i);
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        ASSERT(dist == 30);
+    }
+    {
+        vector<vector<vector<int>>> vector_test{{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}},
+                                        {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}},
+                                        {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}}};
+        
+        ListFromVecInDegree<vector<vector<vector<int>>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            ASSERT(s == ++i);
+            if (i == 30) { i = 0; }
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        ASSERT(dist == 90);
+    }
+    {
+        list<list<list<int>>> vector_test{{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}},
+                                        {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}},
+                                        {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}, {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}}};
+    
+        ListFromVecInDegree<list<list<list<int>>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            ASSERT(s == ++i);
+            if (i == 30) { i = 0; }
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        ASSERT(dist == 90);
+    }
+    {
+        set<set<set<int>>> vector_test{{{1,  2,  3},  {4,  5,  6},  {7,  8,  9},  {10, 11, 12}, {13, 14, 15}, {16, 17, 18}, {19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}},
+                                       {{31, 32, 33}, {34, 35, 36}, {37, 38, 39}, {40, 41, 42}, {43, 44, 45}, {46, 47, 48}, {49, 50, 51}, {52, 53, 54}, {55, 56, 57}, {58, 59, 60}, {61, 62, 63}},
+                                       {{64, 65, 66}, {67, 68, 69}, {70, 71, 72}, {73, 74, 75}, {76, 77, 78}, {79, 80, 81}, {82, 83, 84}, {85, 86, 87}, {88, 89, 90}, {91, 92, 93}, {94, 95, 96}, {97, 98, 99}}};
+        
+        ListFromVecInDegree<set<set<set<int>>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            ASSERT(s == ++i);
+            cout << s << " = " << i << endl;
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        cout << "dist " << dist << endl;
+        ASSERT(dist == 99);
+    }
+    {
+        set<set<set<int>>> vector_test{{{1,  2,  3},  {2,  5,  6},  {2,  8,  9}},
+                                       {{10, 11, 12}, {13, 14, 15}, {16, 17, 18}},
+                                       {{19, 20, 21}, {22, 23, 24}, {25, 26, 27}, {28, 29, 30}}};
+        vector<int> vector_sample {1,  2,  3,  2,  5,  6,  2,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+        ListFromVecInDegree<set<set<set<int>>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            cout << s << " = " << vector_sample[i] << endl;
+            ASSERT(s == vector_sample[i]);
+            ++i;
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        cout << "dist " << dist << endl;
+        ASSERT(dist == 30);
+    }
+    {
+        vector<vector<int>> vector_test{{1,  2,  3},
+                                        {},
+                                        {7,  8,  9},
+                                        {10, 11, 12},
+                                        {13},
+                                        {16, 17, 18},
+                                        {19, 20, 21},
+                                        {22, 23},
+                                        {25, 26, 27},
+                                        {28, 29, 30}};
+        
+        ListFromVecInDegree<vector<vector<int>>, int> joined(vector_test);
+        auto dist = std::distance(joined.begin(), joined.end());
+        ASSERT(dist == 24);
+    }
+    {
+        vector<vector<int>> vector_test {};
+        ListFromVecInDegree<vector<vector<int>>, int> joined(vector_test);
+        int i = 0;
+        for (auto s : joined) {
+            ASSERT(s == ++i);
+        }
+        auto dist = std::distance(joined.begin(), joined.end());
+        ASSERT(dist == 0);
+    }
+    {
+        vector<int> vector_test2{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        ListFromVecInDegree<vector<int>, int> joined2(vector_test2);
+        auto dist2 = std::distance(joined2.begin(), joined2.end());
+        ASSERT(dist2 == 10);
+    }
+}
+
 void TestProcessQueriesJoined()
 {
     using namespace std;
@@ -630,6 +746,7 @@ void TestSearchServer()
     RUN_TEST (TestGetWordFrequencies);
     RUN_TEST (TestRemoveDocument);
     RUN_TEST (TestProcessQueries);
+    RUN_TEST (TestIteratorTree);
     RUN_TEST (TestProcessQueriesJoined);
 }
 

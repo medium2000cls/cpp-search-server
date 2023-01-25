@@ -142,6 +142,8 @@ void TestRemoveDocument();
 
 void TestProcessQueries();
 
+void TestIteratorTree();
+
 void TestProcessQueriesJoined();
 // Функция TestSearchServer является точкой входа для запуска тестов
 void TestSearchServer();
